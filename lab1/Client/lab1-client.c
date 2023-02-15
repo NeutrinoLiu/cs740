@@ -279,7 +279,8 @@ lcore_main()
     struct rte_udp_hdr *udp_hdr;
 
     // Specify the dst mac address here: 
-    struct rte_ether_addr dst = {{0x14,0x58,0xD0,0x58,0x5F,0x33}};
+    // struct rte_ether_addr dst = {{0x14,0x58:0xD0:0x58:0x2F:0x32}} // eno1
+    struct rte_ether_addr dst = {{0x14,0x58:0xD0:0x58:0x2F:0x33}} // eno1d1
 
 	struct sliding_hdr *sld_h_ack;
     uint16_t nb_rx;
