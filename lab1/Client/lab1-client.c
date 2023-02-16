@@ -15,6 +15,7 @@
 
 #include <rte_common.h>
 
+#define CLOCK_MONOTONIC 1
 // #define PKT_TX_IPV4          (1ULL << 55)
 // #define PKT_TX_IP_CKSUM      (1ULL << 54)
 
@@ -24,6 +25,8 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
+
+#define MAX_FLOWS 8
 uint32_t NUM_PING = 100;
 
 /* Define the mempool globally */
@@ -107,7 +110,7 @@ static int parse_packet(struct sockaddr_in *src,
             eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
 			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
 			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-        return 1;
+        return 0; // idk why used to return 1 when bad mac
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
         printf("Bad ether type\n");
@@ -141,28 +144,11 @@ static int parse_packet(struct sockaddr_in *src,
     in_port_t udp_dst_port = udp_hdr->dst_port;
     int ret = 0;
 	
-
-	uint16_t p1 = rte_cpu_to_be_16(5001);
-	uint16_t p2 = rte_cpu_to_be_16(5002);
-	uint16_t p3 = rte_cpu_to_be_16(5003);
-	uint16_t p4 = rte_cpu_to_be_16(5004);
-	
-	if (udp_hdr->dst_port ==  p1)
-	{
-		ret = 1;
-	}
-	if (udp_hdr->dst_port ==  p2)
-	{
-		ret = 2;
-	}
-	if (udp_hdr->dst_port ==  p3)
-	{
-		ret = 3;
-	}
-	if (udp_hdr->dst_port ==  p4)
-	{
-		ret = 4;
-	}
+    for (int i = 1; i < MAX_FLOWS + 1; i++)
+        if (udp_hdr->dst_port == rte_cpu_to_be_16(5000 + i)) {
+            ret = i;
+            break;
+        }
 
     src->sin_port = udp_src_port;
     dst->sin_port = udp_dst_port;
@@ -194,6 +180,8 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	uint16_t q;
 	struct rte_eth_dev_info dev_info;
 	struct rte_eth_txconf txconf;
+
+    printf("port avail id: %u\n", port);
 
 	if (!rte_eth_dev_is_valid_port(port))
 		return -1;
@@ -271,7 +259,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 static __rte_noreturn void
 lcore_main()
 {
-    struct rte_mbuf *pkts[BURST_SIZE];
+    struct rte_mbuf *r_pkts[BURST_SIZE];
     struct rte_mbuf *pkt;
     // char *buf_ptr;
     struct rte_ether_hdr *eth_hdr;
@@ -356,7 +344,7 @@ lcore_main()
         pkt->l3_len = sizeof(struct rte_ipv4_hdr);
         // pkt->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
         pkt->data_len = header_size + packet_len;
-        pkt->pkt_len = header_size + packet_len;
+        pkt->pkt_len = header_size + packet_len; // since no segmentation
         pkt->nb_segs = 1;
         int pkts_sent = 0;
 
@@ -376,7 +364,7 @@ lcore_main()
         nb_rx = 0;
         reqs += 1;
         while ((outstanding[port_id] > 0)) {
-            nb_rx = rte_eth_rx_burst(1, 0, pkts, BURST_SIZE);
+            nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
             if (nb_rx == 0) {
                 continue;
             }
@@ -386,18 +374,15 @@ lcore_main()
                 struct sockaddr_in src, dst;
                 void *payload = NULL;
                 size_t payload_length = 0;
-                int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
-                if (p != 0) {
-
-                    rte_pktmbuf_free(pkts[i]);
+                int p = parse_packet(&src, &dst, &payload, &payload_length, r_pkts[i]);
+                if (p != 0) 
                     outstanding[p-1]--;
-                } else {
-                    rte_pktmbuf_free(pkts[i]);
-                }
+                rte_pktmbuf_free(r_pkts[i]);
+
             }
         }
 
-        // port_id = (port_id+1) % flow_num;
+        port_id = (port_id+1) % flow_num;
     }
     printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
@@ -443,14 +428,14 @@ int main(int argc, char *argv[])
 		rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
 	/* Initializing all ports. 8< */
-	RTE_ETH_FOREACH_DEV(portid)
+	RTE_ETH_FOREACH_DEV(portid) 
 	if (portid == 1 && port_init(portid, mbuf_pool) != 0)
 		rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n",
 				 portid);
 	/* >8 End of initializing all ports. */
 
-	if (rte_lcore_count() > 1)
-		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
+	// if (rte_lcore_count() > 1)
+	// 	printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
 	/* Call lcore_main on the main core only. Called on single lcore. 8< */
 	lcore_main();

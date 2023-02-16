@@ -20,6 +20,7 @@
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
 #define PORT_NUM 4
+#define MAX_FLOWS 8
 
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
@@ -208,28 +209,11 @@ static int get_port(struct sockaddr_in *src,
 	int ret = 0;
 	
 
-	uint16_t p1 = rte_cpu_to_be_16(5001);
-	uint16_t p2 = rte_cpu_to_be_16(5002);
-	uint16_t p3 = rte_cpu_to_be_16(5003);
-	uint16_t p4 = rte_cpu_to_be_16(5004);
-	// printf("dst port %d, %d\n", udp_hdr->dst_port, p2);
-	
-	if (udp_hdr->dst_port ==  p1)
-	{
-		ret = 1;
-	}
-	if (udp_hdr->dst_port ==  p2)
-	{
-		ret = 2;
-	}
-	if (udp_hdr->dst_port ==  p3)
-	{
-		ret = 3;
-	}
-	if (udp_hdr->dst_port ==  p4)
-	{
-		ret = 4;
-	}
+    for (int i = 1; i < MAX_FLOWS + 1; i++)
+        if (udp_hdr->dst_port == rte_cpu_to_be_16(5000 + i)) {
+            ret = i;
+            break;
+        }
 
     src->sin_port = udp_src_port;
     dst->sin_port = udp_dst_port;
