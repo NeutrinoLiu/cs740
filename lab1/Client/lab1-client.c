@@ -105,12 +105,12 @@ static int parse_packet(struct sockaddr_in *src,
 
     rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr)) {
-        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-        return 0; // idk why used to return 1 when bad mac
+        // printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+		// 	   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+        //     eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+		// 	eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+		// 	eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+        return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
         printf("Bad ether type\n");
@@ -256,7 +256,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 /* >8 End Basic forwarding application lcore. */
 
-static __rte_noreturn void
+static void
 lcore_main()
 {
     struct rte_mbuf *r_pkts[BURST_SIZE];
