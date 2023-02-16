@@ -1,2 +1,4 @@
 .DS_Store
 lab1/dpdk/
+lab1/Server/build/
+lab1/Client/build/
