@@ -370,6 +370,8 @@ lcore_main(void)
 
 				// printf("Udp checksum is %u\n", (unsigned)udp_cksum);
 				udp_h_ack->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
+				header_size += sizeof(*udp_h_ack);
+				ptr += sizeof(*udp_h_ack);
 				
 				/* set the payload */
 				memset(ptr, 'a', ack_len);
