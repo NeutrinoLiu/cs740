@@ -293,10 +293,11 @@ lcore_main(void)
 				if(udp_port_id != 0){
 					printf("received: %d\n", rec);
 				} else { // skip bad mac whos return port is 0
-					rte_pktmbuf_free(bufs[i]);
+					printf("get port 0\n");
+					rte_pktmbuf_free(pkt);
 					continue;
 				}
-				printf("target port %u", udp_port_id);
+				printf("target port %u ", udp_port_id);
 
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 				if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4))
