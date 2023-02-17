@@ -480,15 +480,24 @@ lcore_main()
     // return 0;
 }
 
+static inline void
+window_status(){
+    for (int i=0; i<flow_num; i++)
+        printf("window %d: head-%d, sent-%d, avail-%d \n", i,
+            window_list[i].head,
+            window_list[i].sent,
+            window_list[i].avail);
+}
+
 static void
 lcore_main_rev(__rte_unused void *arg)
 {
     uint16_t nb_rx;
     struct rte_mbuf *r_pkts[BURST_SIZE];
-    printf("start receving threads\n");
     // LAB1: receiving packets should be implemented in another thread
     /* now poll on receiving packets */
     for (;;) {
+        window_status();
         nb_rx = 0;
         for (;;) {
             nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
@@ -572,9 +581,10 @@ int main(int argc, char *argv[])
     // standalone thread for rev
     unsigned int id = rte_get_next_lcore(-1, 1, 0);
     // printf("target lcore is %u\n", id);
+    printf("\nstart receving threads\n");
     rte_eal_remote_launch(lcore_main_rev, NULL, id);
     // send thread in main lcore
-    printf("\nstart main sending threads\n");
+    printf("start main sending threads\n");
 	lcore_main();
 	/* >8 End of called on single lcore. */
     printf("all sending done! waiting for receiving ack ...\n");

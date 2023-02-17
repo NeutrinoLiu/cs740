@@ -394,6 +394,7 @@ lcore_main(void)
 			if (nb_replies > 0)
 			{
 				nb_tx = rte_eth_tx_burst(port, 0, acks, nb_replies);
+				printf("%u acks have been replied\n", nb_tx);
 			}
 
 			/* Free any unsent packets. */
