@@ -152,6 +152,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 static int get_port(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
+						int *seq,
                         // void **payload,
                         // size_t *payload_len,
                         struct rte_mbuf *pkt)
@@ -224,7 +225,9 @@ static int get_port(struct sockaddr_in *src,
     
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
-    
+
+	*seq = tcp_hdr->sent_seq;
+
     // *payload_len = pkt->pkt_len - header;
     // *payload = (void *)p;
     
@@ -292,12 +295,13 @@ lcore_main(void)
 			{
 				pkt = bufs[i];
 				struct sockaddr_in src, dst;
+				int seq;
                 // void *payload = NULL;
                 // size_t payload_length = 0;
-                int flow_id = get_port(&src, &dst, pkt);
+                int flow_id = get_port(&src, &dst, &seq, pkt);
 				// printf("rv: %u, target port %u ", i, flow_id);
 				if(flow_id != 0){
-					printf("received: %d\n", rec);
+					printf("received: #%d from flow #%d\n", seq, flow_id);
 				} else { // skip bad mac whos return port is 0
 					rte_pktmbuf_free(pkt);
 					nb_badmac ++; // avoid double free
@@ -380,9 +384,9 @@ lcore_main(void)
 				ack->data_len = header_size + ack_len;
 				ack->pkt_len = header_size + ack_len;
 				ack->nb_segs = 1;
-				int pkts_sent = 0;
+				// int pkts_sent = 0;
 
-				unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);
+				// unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);
 				acks[nb_replies++] = ack;
 				
 				rte_pktmbuf_free(bufs[i]);

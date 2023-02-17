@@ -483,7 +483,7 @@ lcore_main()
 static inline void
 window_status(){
     for (int i=0; i<flow_num; i++)
-        printf("window %d: head-%d, sent-%d, avail-%d \n", i,
+        printf("window %d: head %d, sent %d, avail %d \n", i,
             window_list[i].head,
             window_list[i].sent,
             window_list[i].avail);
@@ -502,11 +502,12 @@ lcore_main_rev(__rte_unused void *arg)
         for (;;) {
             nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
             if (nb_rx == 0) {
+                // printf("nothing reveived.\n");
                 continue;
             }
         }
 
-        printf("Received burst of %u\n", (unsigned)nb_rx);
+        printf("Receive %u acks\n", (unsigned)nb_rx);
         for (int i = 0; i < nb_rx; i++) {
             struct sockaddr_in src, dst;
             // void *payload = NULL;
