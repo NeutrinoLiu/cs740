@@ -476,7 +476,7 @@ lcore_main()
 }
 
 static void
-lcore_main_rev()
+lcore_main_rev(__rte_unused void *arg)
 {
     uint16_t nb_rx;
     struct rte_mbuf *r_pkts[BURST_SIZE];
