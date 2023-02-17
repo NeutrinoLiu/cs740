@@ -136,11 +136,11 @@ static int parse_packet(struct sockaddr_in *src,
 
     rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr)) {
-        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+        // printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+		// 	   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+        //     eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+		// 	eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+		// 	eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
@@ -316,9 +316,9 @@ check_window(size_t flow_id){
 static void
 slide_window_onair(size_t flow_id, uint16_t seq){
     LOCK(window_list[flow_id].lock);
-    if (seq != window_list[flow_id].sent) 
+    if (seq != window_list[flow_id].sent + 1) 
         printf("mismatch of the sent record\n");
-    else window_list[flow_id].sent += 1;
+    window_list[flow_id].sent = seq;
     UNLOCK(window_list[flow_id].lock);
 }
 
@@ -361,17 +361,17 @@ lcore_main()
     // uint64_t cycle_wait = intersend_time * rte_get_timer_hz() / (1e9);
     
     // TODO: add in scaffolding for timing/printing out quick statistics
-    int outstanding[flow_num];
+    // int outstanding[flow_num];
     uint16_t seq[flow_num];
     size_t flow_id = 0;
     for(size_t i = 0; i < flow_num; i++)
     {
-        outstanding[i] = 0;
+        // outstanding[i] = 0;
         seq[i] = 0;
     }  // flow[i] : 500i -> 500i
 
     while (seq[flow_id] < NUM_PING) {
-        if (check_window(flow_id)) { // skip this flow sending when its slidewindow is full
+        if (!check_window(flow_id)) { // skip this flow sending when its slidewindow is full
             flow_id = (flow_id+1) % flow_num;
             continue;
         }
@@ -441,7 +441,7 @@ lcore_main()
         // ignore offset, i.e. header size, it is not used 
         // ignore rx_win, client dont receive anything
         uint16_t tcp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)tcp_hdr);
-        
+
         tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
         ptr += sizeof(*tcp_hdr);
         header_size += sizeof(*tcp_hdr);
@@ -463,8 +463,9 @@ lcore_main()
             pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
             if(pkts_sent == 1)
             {
-                outstanding[flow_id] ++;
+                // outstanding[flow_id] ++;
                 slide_window_onair(flow_id, seq[flow_id]); //slide the window according to its seq
+                printf("packet #%u for flow #%d is sent\n", seq[flow_id], flow_id);
                 seq[flow_id]++;
             }
         }
@@ -479,12 +480,12 @@ lcore_main()
     // return 0;
 }
 
-static int
+static void
 lcore_main_rev(__rte_unused void *arg)
 {
     uint16_t nb_rx;
     struct rte_mbuf *r_pkts[BURST_SIZE];
-
+    printf("start receving threads\n");
     // LAB1: receiving packets should be implemented in another thread
     /* now poll on receiving packets */
     for (;;) {
@@ -510,8 +511,14 @@ lcore_main_rev(__rte_unused void *arg)
             rte_pktmbuf_free(r_pkts[i]);
 
         }
+
+        for (int i=0; i<flow_num; i++) {
+            if (window_list[i].head < NUM_PING)
+                goto keep;
+        }
+        break;
+        keep: {}
     }
-    return 0;
 }
 
 /*
@@ -561,13 +568,19 @@ int main(int argc, char *argv[])
 	/* >8 End of initializing all ports. */
 
     init_window(flow_num);
+    // printf("i am core %u\n", rte_lcore_id);
     // standalone thread for rev
-    rte_eal_remote_launch(lcore_main_rev, NULL, 1);
+    unsigned int id = rte_get_next_lcore(-1, 1, 0);
+    // printf("target lcore is %u\n", id);
+    rte_eal_remote_launch(lcore_main_rev, NULL, id);
     // send thread in main lcore
+    printf("\nstart main sending threads\n");
 	lcore_main();
 	/* >8 End of called on single lcore. */
+    printf("all sending done! waiting for receiving ack ...\n");
+    rte_eal_wait_lcore(id);
+    printf("all acked!");
     free(window_list);
-    printf("Done!\n");
 	/* clean up the EAL */
 	rte_eal_cleanup();
 
