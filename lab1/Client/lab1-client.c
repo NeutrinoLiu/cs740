@@ -14,6 +14,7 @@
 #include <rte_tcp.h>
 #include <rte_ip.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include <rte_common.h>
 
@@ -32,7 +33,7 @@
 #define MAX_WIN_SIZE 10
 
 /* optional Lock*/
-#define WIN_LOCK
+// #define WIN_LOCK
 #ifdef WIN_LOCK
     #define INIT(l) if (pthread_mutex_init(&l, NULL) != 0) printf("\n mutex init has failed\n")
     #define LOCK(l) pthread_mutex_lock(&l)
@@ -47,7 +48,7 @@
 
 #define SET(x,y) x = x & y
 
-uint32_t NUM_PING = 100;
+int NUM_PING = 100;
 
 /* LAB1 define slide window*/
 struct tx_window { // TODO add lock
@@ -136,11 +137,11 @@ static int parse_packet(struct sockaddr_in *src,
 
     rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr)) {
-        // printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-		// 	   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-        //     eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-		// 	eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-		// 	eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
@@ -293,12 +294,12 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 static int
 init_window(size_t flow_num){
-    window_list = (struct tx_window*) malloc(sizeof(struct tx_window) * flow_num);
+    window_list = (struct tx_window*) malloc(sizeof(struct tx_window) * (flow_num));
     if (window_list == NULL) {
         printf("fail to create tx window list.\n");
         return 1;
     }
-    for (int i = 0; i<flow_num; i++){
+    for (int i = 0; i<flow_num ; i++){ 
         window_list[i].head = 0;
         window_list[i].sent = -1;
         // window_list[i].size = MAX_WIN_SIZE; // since no hand shake, we dont know the inital rwnd, just max it
@@ -314,11 +315,9 @@ check_window(size_t flow_id){
 }
 
 static void
-slide_window_onair(size_t flow_id, uint16_t seq){
+slide_window_onair(size_t flow_id){
     LOCK(window_list[flow_id].lock);
-    if (seq != window_list[flow_id].sent + 1) 
-        printf("mismatch of the sent record\n");
-    window_list[flow_id].sent = seq;
+    window_list[flow_id].sent += 1;
     UNLOCK(window_list[flow_id].lock);
 }
 
@@ -329,7 +328,8 @@ slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
         return;
     }
     if (ack > window_list[flow_id].sent) {
-        printf("get ack about not sent packet.\n");
+        printf("get ack about not sent packet(%d/%d) for flow#%d.\n",
+            ack, window_list[flow_id].sent, flow_id);
         return;
     }
 
@@ -342,6 +342,7 @@ slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
     UNLOCK(window_list[flow_id].lock);
 }
 
+static void receive_once();
 static int
 lcore_main()
 {
@@ -362,15 +363,16 @@ lcore_main()
     
     // TODO: add in scaffolding for timing/printing out quick statistics
     // int outstanding[flow_num];
-    uint16_t seq[flow_num];
+    // uint16_t seq[flow_num];
     size_t flow_id = 0;
-    for(size_t i = 0; i < flow_num; i++)
-    {
-        // outstanding[i] = 0;
-        seq[i] = 0;
-    }  // flow[i] : 500i -> 500i
+    // for(size_t i = 0; i < flow_num; i++)
+    // {
+    //     // outstanding[i] = 0;
+    //     seq[i] = 0;
+    // }  // flow[i] : 500i -> 500i
 
-    while (seq[flow_id] < NUM_PING) {
+    while (window_list[flow_id].sent < NUM_PING-1) {
+        // receive_once();
         if (!check_window(flow_id)) { // skip this flow sending when its slidewindow is full
             flow_id = (flow_id+1) % flow_num;
             continue;
@@ -432,11 +434,11 @@ lcore_main()
         uint16_t dstp = 5001 + flow_id;
         tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
         tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        tcp_hdr->sent_seq = seq[flow_id];               // not use a byte based but only use a 1000bytes based
+        tcp_hdr->sent_seq = window_list[flow_id].sent + 1;               // not use a byte based but only use a 1000bytes based
         // ignore rev_ack, client dont receive anything
-        if (seq[flow_id] == 0)
+        if (tcp_hdr->sent_seq == 0)
             SET(tcp_hdr->tcp_flags, RTE_TCP_SYN_FLAG);  // first packet starts a TCP flow, handshake is ignred
-        if (seq[flow_id] == NUM_PING -1)
+        if (tcp_hdr->sent_seq == NUM_PING - 1)
             SET(tcp_hdr->tcp_flags, RTE_TCP_FIN_FLAG);  // last packet ends a TCP flow, farewell is ignored
         // ignore offset, i.e. header size, it is not used 
         // ignore rx_win, client dont receive anything
@@ -464,9 +466,8 @@ lcore_main()
             if(pkts_sent == 1)
             {
                 // outstanding[flow_id] ++;
-                slide_window_onair(flow_id, seq[flow_id]); //slide the window according to its seq
-                printf("packet #%u for flow #%d is sent\n", seq[flow_id], flow_id);
-                seq[flow_id]++;
+                slide_window_onair(flow_id); //slide the window according to its seq
+                printf("packet #%d for flow #%d is sent\n", window_list[flow_id].sent, flow_id);
             }
         }
         
@@ -474,33 +475,54 @@ lcore_main()
         // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
         rte_pktmbuf_free(pkt);
         flow_id = (flow_id+1) % flow_num;
-
-        // struct rte_mbuf *r_pkts[BURST_SIZE];
-        // uint16_t nb_rx;
-
-        // nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
-        // if (nb_rx == 0) {
-        //     printf("nothing reveived.\n");
-        // } else {
-        //     printf("reveived something in main thread\n");
-        // }
-
-
     }
     // printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
     // return 0;
-
 
 }
 
 static inline void
 window_status(){
     for (int i=0; i<flow_num; i++)
-        printf("window %d: head %d, sent %d, avail %d \n", i,
+        printf("flow #%d's window: head %d, sent %d, avail %d \n", i,
             window_list[i].head,
             window_list[i].sent,
             window_list[i].avail);
+}
+
+
+static void 
+receive_once() {
+    uint16_t nb_rx;
+    struct rte_mbuf *r_pkts[BURST_SIZE];
+    // LAB1: receiving packets should be implemented in another thread
+    /* now poll on receiving packets */
+
+    window_status();
+    nb_rx = 0;
+    nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
+    if (nb_rx == 0) {
+        printf("nothing reveived.\n");
+        return;
+    }
+
+
+    for (int i = 0; i < nb_rx; i++) {
+        struct sockaddr_in src, dst;
+        // void *payload = NULL;
+        // size_t payload_length = 0;
+        int ack_seq;
+        int window;
+        int index = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
+        int flow_id = index - 1;
+        printf("Receive acks of #%d in flow #%d\n", ack_seq, flow_id);
+        if (index != 0) 
+            slide_window_ack(flow_id, ack_seq, window);  // slide and resize the window according to ack （ack: ack+window）
+                                        // resize by the window in the ack, not a fix number
+        rte_pktmbuf_free(r_pkts[i]);
+    }
+
 }
 
 static void
@@ -516,7 +538,8 @@ lcore_main_rev(__rte_unused void *arg)
         for (;;) {
             nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
             if (nb_rx == 0) {
-                // printf("nothing reveived.\n");
+                printf("nothing reveived.\n");
+                sleep(1);
                 continue;
             }
         }
@@ -528,8 +551,9 @@ lcore_main_rev(__rte_unused void *arg)
             // size_t payload_length = 0;
             int ack_seq;
             int window;
-            int flow_id = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
-            if (flow_id != 0) 
+            int index = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
+            int flow_id = index - 1;
+            if (index != 0) 
                 slide_window_ack(flow_id, ack_seq, window);  // slide and resize the window according to ack （ack: ack+window）
                                             // resize by the window in the ack, not a fix number
             rte_pktmbuf_free(r_pkts[i]);

@@ -173,11 +173,11 @@ static int get_port(struct sockaddr_in *src,
     struct rte_ether_addr mac_addr = {};
 	rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
-        // printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-		// 	   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-        //     eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-		// 	eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-		// 	eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
@@ -298,9 +298,10 @@ lcore_main(void)
 				int seq;
                 // void *payload = NULL;
                 // size_t payload_length = 0;
-                int flow_id = get_port(&src, &dst, &seq, pkt);
+                int index = get_port(&src, &dst, &seq, pkt);
 				// printf("rv: %u, target port %u ", i, flow_id);
-				if(flow_id != 0){
+				int flow_id = index - 1;
+				if(index != 0){
 					printf("received: #%d from flow #%d\n", seq, flow_id);
 				} else { // skip bad mac whos return port is 0
 					rte_pktmbuf_free(pkt);
