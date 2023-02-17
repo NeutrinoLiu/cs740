@@ -157,7 +157,7 @@ static int parse_packet(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
+    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
         printf("Bad next proto_id\n");
         return 0;
     }
@@ -401,7 +401,7 @@ lcore_main()
         ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
         ipv4_hdr->fragment_offset = 0;
         ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_TCP;
+        ipv4_hdr->next_proto_id = IPPROTO_UDP;
         ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
@@ -474,10 +474,24 @@ lcore_main()
         // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
         rte_pktmbuf_free(pkt);
         flow_id = (flow_id+1) % flow_num;
+
+        // struct rte_mbuf *r_pkts[BURST_SIZE];
+        // uint16_t nb_rx;
+
+        // nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
+        // if (nb_rx == 0) {
+        //     printf("nothing reveived.\n");
+        // } else {
+        //     printf("reveived something in main thread\n");
+        // }
+
+
     }
     // printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
     // return 0;
+
+
 }
 
 static inline void
