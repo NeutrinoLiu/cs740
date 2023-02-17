@@ -12,6 +12,7 @@
 #include <rte_mbuf.h>
 #include <rte_udp.h>
 #include <rte_ip.h>
+#include <pthread.h>
 
 #include <rte_common.h>
 
@@ -27,7 +28,34 @@
 #define BURST_SIZE 32
 
 #define MAX_FLOWS 8
+#define MAX_WIN_SIZE 10
+
+/* optional Lock*/
+#define WIN_LOCK
+#ifdef WIN_LOCK
+    #define INIT(l) if (pthread_mutex_init(&l, NULL) != 0) printf("\n mutex init has failed\n")
+    #define LOCK(l) pthread_mutex_lock(&l)
+    #define UNLOCK(l) pthread_mutex_unlock(&l)
+#else
+    #define INIT(l) {}
+    #define LOCK(l) {}
+    #define UNLOCK(l) {}
+#endif
+
+
+
+#define SET(x,y) x = x & y
+
 uint32_t NUM_PING = 100;
+
+/* LAB1 define slide window*/
+struct tx_window { // TODO add lock
+    int head; // seq of the first packet in the window [3,4,5,6|7,8] - 3
+    int sent; // how many packet has been sent [3,4,5,6|7,8] - 6
+    // int size; // last time ack indicated win size [3,4,5,6|7,8] - 6
+    int avail; // max avail to sent packet
+    pthread_mutex_t lock;
+};
 
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
@@ -35,7 +63,7 @@ static struct rte_ether_addr my_eth;
 static size_t message_size = 1000;
 static uint32_t seconds = 1;
 
-size_t window_len = 10;
+struct tx_window *window_list = NULL;
 
 int flow_size = 10000;
 int packet_len = 1000;
@@ -84,8 +112,10 @@ wrapsum(uint32_t sum)
 
 static int parse_packet(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
-                        void **payload,
-                        size_t *payload_len,
+                        int *ack,
+                        int *win,
+                        // void **payload,
+                        // size_t *payload_len,
                         struct rte_mbuf *pkt)
 {
     // packet layout order is (from outside -> in):
@@ -135,29 +165,33 @@ static int parse_packet(struct sockaddr_in *src,
     dst->sin_addr.s_addr = ipv4_dst_addr;
     
     // check udp header
-    struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
-    p += sizeof(*udp_hdr);
-    header += sizeof(*udp_hdr);
+    // struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
+    struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
+    p += sizeof(*tcp_hdr);
+    header += sizeof(*tcp_hdr);
 
     // In network byte order.
-    in_port_t udp_src_port = udp_hdr->src_port;
-    in_port_t udp_dst_port = udp_hdr->dst_port;
+    in_port_t tcp_src_port = tcp_hdr->src_port;
+    in_port_t tcp_dst_port = tcp_hdr->dst_port;
     int ret = 0;
 	
     for (int i = 1; i < MAX_FLOWS + 1; i++)
-        if (udp_hdr->dst_port == rte_cpu_to_be_16(5000 + i)) {
+        if (tcp_hdr->dst_port == rte_cpu_to_be_16(5000 + i)) {
             ret = i;
             break;
         }
 
-    src->sin_port = udp_src_port;
-    dst->sin_port = udp_dst_port;
+    src->sin_port = tcp_src_port;
+    dst->sin_port = tcp_dst_port;
     
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
     
-    *payload_len = pkt->pkt_len - header;
-    *payload = (void *)p;
+    // *payload_len = pkt->pkt_len - header;
+    // *payload = (void *)p;
+
+    *ack = (int) tcp_hdr->recv_ack;
+    *win = (int) tcp_hdr->rx_win;
     return ret;
 
 }
@@ -256,36 +290,90 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 /* >8 End Basic forwarding application lcore. */
 
+static int
+init_window(size_t flow_num){
+    window_list = (struct tx_window*) malloc(sizeof(struct tx_window) * flow_num);
+    if (window_list == NULL) {
+        printf("fail to create tx window list.\n");
+        return 1;
+    }
+    for (int i = 0; i<flow_num; i++){
+        window_list[i].head = 0;
+        window_list[i].sent = -1;
+        // window_list[i].size = MAX_WIN_SIZE; // since no hand shake, we dont know the inital rwnd, just max it
+        window_list[i].avail = MAX_WIN_SIZE - 1;
+        INIT(window_list[i].lock);
+    }
+    return 0;
+}
+
+static bool
+check_window(size_t flow_id){
+    return window_list[flow_id].avail > window_list[flow_id].sent;
+}
+
+static void
+slide_window_onair(size_t flow_id, uint16_t seq){
+    LOCK(window_list[flow_id].lock);
+    if (seq != window_list[flow_id].sent) 
+        printf("mismatch of the sent record\n");
+    else window_list[flow_id].sent += 1;
+    UNLOCK(window_list[flow_id].lock);
+}
+
+static void
+slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
+    if (ack < window_list[flow_id].head) {
+        printf("already acked %u\n", ack);
+        return;
+    }
+    if (ack > window_list[flow_id].sent) {
+        printf("get ack about not sent packet.\n");
+        return;
+    }
+
+    LOCK(window_list[flow_id].lock);
+    window_list[flow_id].head = ack + 1;
+    window_list[flow_id].avail = ack + new_size;
+    if (window_list[flow_id].sent > window_list[flow_id].avail) 
+        printf("the window shrinks too much\n");
+
+    UNLOCK(window_list[flow_id].lock);
+}
+
 static void
 lcore_main()
 {
-    struct rte_mbuf *r_pkts[BURST_SIZE];
     struct rte_mbuf *pkt;
     // char *buf_ptr;
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
-    struct rte_udp_hdr *udp_hdr;
+    // struct rte_udp_hdr *udp_hdr;
+    struct rte_tcp_hdr *tcp_hdr;
 
     // Specify the dst mac address here: 
     // struct rte_ether_addr dst = {{0x14,0x58,0xD0,0x58,0x2F,0x32}}; // eno1
     struct rte_ether_addr dst = {{0x14,0x58,0xD0,0x58,0x2F,0x33}}; // eno1d1
 
 	struct sliding_hdr *sld_h_ack;
-    uint16_t nb_rx;
-    uint64_t reqs = 0;
+    // uint64_t reqs = 0;
     // uint64_t cycle_wait = intersend_time * rte_get_timer_hz() / (1e9);
     
     // TODO: add in scaffolding for timing/printing out quick statistics
     int outstanding[flow_num];
     uint16_t seq[flow_num];
-    size_t port_id = 0;
+    size_t flow_id = 0;
     for(size_t i = 0; i < flow_num; i++)
     {
         outstanding[i] = 0;
         seq[i] = 0;
-    } 
+    }  // flow[i] : 500i -> 500i
 
-    while (seq[port_id] < NUM_PING) {
+    while (seq[flow_id] < NUM_PING) {
+        if (check_window(flow_id)) { // skip this flow sending when its slidewindow is full
+            flow_id = (flow_id+1) % flow_num;
+            continue;
+        }
         // send a packet
         pkt = rte_pktmbuf_alloc(mbuf_pool);
         if (pkt == NULL) {
@@ -322,20 +410,37 @@ lcore_main()
         header_size += sizeof(*ipv4_hdr);
         ptr += sizeof(*ipv4_hdr);
 
-        /* add in UDP hdr*/
-        udp_hdr = (struct rte_udp_hdr *)ptr;
-        uint16_t srcp = 5001 + port_id;
-        uint16_t dstp = 5001 + port_id;
-        udp_hdr->src_port = rte_cpu_to_be_16(srcp);
-        udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
+        // /* add in UDP hdr*/
+        // udp_hdr = (struct rte_udp_hdr *)ptr;
+        // uint16_t srcp = 5001 + flow_id;
+        // uint16_t dstp = 5001 + flow_id;
+        // udp_hdr->src_port = rte_cpu_to_be_16(srcp);
+        // udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
+        // udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
 
-        uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
+        // uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
 
-        // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
-        udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
-        ptr += sizeof(*udp_hdr);
-        header_size += sizeof(*udp_hdr);
+        // // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
+        // udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
+        // ptr += sizeof(*udp_hdr);
+        // header_size += sizeof(*udp_hdr);
+
+        // LAB1 add in TCP hdr
+        tcp_hdr = (struct rte_tcp_hdr *)ptr;
+        uint16_t srcp = 5001 + flow_id;
+        uint16_t dstp = 5001 + flow_id;
+        tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
+        tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
+        tcp_hdr->sent_seq = seq[flow_id];               // not use a byte based but only use a 1000bytes based
+        // ignore rev_ack, client dont receive anything
+        if (seq[flow_id] == 0)
+            SET(tcp_hdr->tcp_flags, RTE_TCP_SYN_FLAG);  // first packet starts a TCP flow, handshake is ignred
+        if (seq[flow_id] == NUM_PING -1)
+            SET(tcp_hdr->tcp_flags, RTE_TCP_FIN_FLAG);  // last packet ends a TCP flow, farewell is ignored
+        // ignore offset, i.e. header size, it is not used 
+        // ignore rx_win, client dont receive anything
+        uint16_t tcp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)tcp_hdr);
+        tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
 
         /* set the payload */
         memset(ptr, 'a', packet_len);
@@ -350,44 +455,60 @@ lcore_main()
 
         unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
        
-        pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
-        if(pkts_sent == 1)
-        {
-            seq[port_id]++;
-            outstanding[port_id] ++;
+        if (check_window(flow_id)) {
+            pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
+            if(pkts_sent == 1)
+            {
+                outstanding[flow_id] ++;
+                slide_window_onair(flow_id, seq[flow_id]); //slide the window according to its seq
+                seq[flow_id]++;
+            }
         }
         
-        uint64_t last_sent = rte_get_timer_cycles();
+        // uint64_t last_sent = rte_get_timer_cycles();
         // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
+        rte_pktmbuf_free(pkt);
+        flow_id = (flow_id+1) % flow_num;
+    }
+    // printf("Sent %"PRIu64" packets.\n", reqs);
+    // dump_latencies(&latency_dist);
+    // return 0;
+}
 
-        /* now poll on receiving packets */
+static void
+lcore_main_rev()
+{
+    uint16_t nb_rx;
+    struct rte_mbuf *r_pkts[BURST_SIZE];
+
+    // LAB1: receiving packets should be implemented in another thread
+    /* now poll on receiving packets */
+    for (;;) {
         nb_rx = 0;
-        reqs += 1;
-        while ((outstanding[port_id] > 0)) {
+        for (;;) {
             nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
             if (nb_rx == 0) {
                 continue;
             }
-
-            printf("Received burst of %u\n", (unsigned)nb_rx);
-            for (int i = 0; i < nb_rx; i++) {
-                struct sockaddr_in src, dst;
-                void *payload = NULL;
-                size_t payload_length = 0;
-                int p = parse_packet(&src, &dst, &payload, &payload_length, r_pkts[i]);
-                if (p != 0) 
-                    outstanding[p-1]--;
-                rte_pktmbuf_free(r_pkts[i]);
-
-            }
         }
 
-        port_id = (port_id+1) % flow_num;
+        printf("Received burst of %u\n", (unsigned)nb_rx);
+        for (int i = 0; i < nb_rx; i++) {
+            struct sockaddr_in src, dst;
+            // void *payload = NULL;
+            // size_t payload_length = 0;
+            int ack_seq;
+            int window;
+            int flow_id = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
+            if (flow_id != 0) 
+                slide_window_ack(flow_id, ack_seq, window);  // slide and resize the window according to ack （ack: ack+window）
+                                            // resize by the window in the ack, not a fix number
+            rte_pktmbuf_free(r_pkts[i]);
+
+        }
     }
-    printf("Sent %"PRIu64" packets.\n", reqs);
-    // dump_latencies(&latency_dist);
-    // return 0;
 }
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
@@ -407,7 +528,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NUM_PING = flow_size / packet_len;
+    NUM_PING = 1 + (flow_size-1) / packet_len; // ceiling round instead of floor round 
 
 	/* Initializion the Environment Abstraction Layer (EAL). 8< */
 	int ret = rte_eal_init(argc, argv);
@@ -434,10 +555,10 @@ int main(int argc, char *argv[])
 				 portid);
 	/* >8 End of initializing all ports. */
 
-	// if (rte_lcore_count() > 1)
-	// 	printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
-
-	/* Call lcore_main on the main core only. Called on single lcore. 8< */
+    init_window(flow_num);
+    // standalone thread for rev
+    rte_eal_remote_launch(lcore_main_rev, NULL, 1);
+    // send thread in main lcore
 	lcore_main();
 	/* >8 End of called on single lcore. */
     printf("Done!\n");
