@@ -157,7 +157,7 @@ static int parse_packet(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_IP != ip_hdr->next_proto_id) {
         printf("Bad next proto_id\n");
         return 0;
     }
@@ -401,7 +401,7 @@ lcore_main()
         ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
         ipv4_hdr->fragment_offset = 0;
         ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_UDP;
+        ipv4_hdr->next_proto_id = IPPROTO_IP;
         ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 

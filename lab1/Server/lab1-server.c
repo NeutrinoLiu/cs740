@@ -194,7 +194,7 @@ static int get_port(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_IP != ip_hdr->next_proto_id) {
         printf("Bad next proto_id\n");
         return 0;
     }
@@ -350,7 +350,7 @@ lcore_main(void)
 				ip_h_ack->packet_id = rte_cpu_to_be_16(1);
 				ip_h_ack->fragment_offset = 0;
 				ip_h_ack->time_to_live = 64;
-				ip_h_ack->next_proto_id = IPPROTO_UDP;
+				ip_h_ack->next_proto_id = IPPROTO_TCP;
 				ip_h_ack->src_addr = ip_h->dst_addr;
 				ip_h_ack->dst_addr = ip_h->src_addr;
 
