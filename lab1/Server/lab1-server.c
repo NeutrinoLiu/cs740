@@ -290,14 +290,14 @@ lcore_main(void)
                 void *payload = NULL;
                 size_t payload_length = 0;
                 int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
+				printf("rv: %u, target port %u ", i, udp_port_id);
 				if(udp_port_id != 0){
 					printf("received: %d\n", rec);
 				} else { // skip bad mac whos return port is 0
-					printf("get port 0\n");
 					rte_pktmbuf_free(pkt);
+					printf("free succeed\n");
 					continue;
 				}
-				printf("target port %u ", udp_port_id);
 
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 				if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4))
