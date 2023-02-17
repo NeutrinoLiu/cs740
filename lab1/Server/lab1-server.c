@@ -292,6 +292,9 @@ lcore_main(void)
                 int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
 				if(udp_port_id != 0){
 					printf("received: %d\n", rec);
+				} else { // skip bad mac whos return port is 0
+					rte_pktmbuf_free(bufs[i]);
+					continue;
 				}
 
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
