@@ -278,11 +278,12 @@ lcore_main(void)
 			struct rte_ipv4_hdr *ip_h_ack;
 			struct rte_udp_hdr *udp_h_ack;
 
-			const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
+			uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
 
 			if (unlikely(nb_rx == 0))
 				continue;
 
+			uint16_t nb_badmac = 0;
 			for (i = 0; i < nb_rx; i++)
 			{
 				pkt = bufs[i];
@@ -290,12 +291,12 @@ lcore_main(void)
                 void *payload = NULL;
                 size_t payload_length = 0;
                 int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
-				printf("rv: %u, target port %u ", i, udp_port_id);
+				// printf("rv: %u, target port %u ", i, udp_port_id);
 				if(udp_port_id != 0){
 					printf("received: %d\n", rec);
 				} else { // skip bad mac whos return port is 0
 					rte_pktmbuf_free(pkt);
-					printf("free succeed\n");
+					nb_badmac ++; // avoid double free
 					continue;
 				}
 
@@ -379,7 +380,7 @@ lcore_main(void)
 				rte_pktmbuf_free(bufs[i]);
 
 			}
-
+			nb_rx -= nb_badmac;
 			/* Send back echo replies. */
 			uint16_t nb_tx = 0;
 			if (nb_replies > 0)
