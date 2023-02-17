@@ -372,7 +372,7 @@ lcore_main()
     // }  // flow[i] : 500i -> 500i
 
     while (window_list[flow_id].sent < NUM_PING-1) {
-        // receive_once();
+        receive_once();
         if (!check_window(flow_id)) { // skip this flow sending when its slidewindow is full
             flow_id = (flow_id+1) % flow_num;
             continue;
@@ -620,15 +620,15 @@ int main(int argc, char *argv[])
     // standalone thread for rev
     unsigned int id = rte_get_next_lcore(-1, 1, 0);
     // printf("target lcore is %u\n", id);
-    printf("\nstart receving threads\n");
-    rte_eal_remote_launch(lcore_main_rev, NULL, id);
+    // printf("\nstart receving threads\n");
+    // rte_eal_remote_launch(lcore_main_rev, NULL, id);
     // send thread in main lcore
     printf("start main sending threads\n");
 	lcore_main();
 	/* >8 End of called on single lcore. */
     printf("all sending done! waiting for receiving ack ...\n");
-    rte_eal_wait_lcore(id);
-    printf("all acked!");
+    // rte_eal_wait_lcore(id);
+    // printf("all acked!");
     free(window_list);
 	/* clean up the EAL */
 	rte_eal_cleanup();
