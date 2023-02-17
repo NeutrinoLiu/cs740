@@ -350,7 +350,7 @@ lcore_main(void)
 				ip_h_ack->packet_id = rte_cpu_to_be_16(1);
 				ip_h_ack->fragment_offset = 0;
 				ip_h_ack->time_to_live = 64;
-				ip_h_ack->next_proto_id = IPPROTO_TCP;
+				ip_h_ack->next_proto_id = IPPROTO_IP;
 				ip_h_ack->src_addr = ip_h->dst_addr;
 				ip_h_ack->dst_addr = ip_h->src_addr;
 
