@@ -169,11 +169,11 @@ static int get_port(struct sockaddr_in *src,
     struct rte_ether_addr mac_addr = {};
 	rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr) ) {
-        // printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-		// 	   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-        //     eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-		// 	eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-		// 	eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
+        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
+			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
+			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
@@ -431,8 +431,8 @@ int main(int argc, char *argv[])
 				 portid);
 	/* >8 End of initializing all ports. */
 
-	if (rte_lcore_count() > 1)
-		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
+	// if (rte_lcore_count() > 1)
+	// 	printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
 	/* Call lcore_main on the main core only. Called on single lcore. 8< */
 	lcore_main();
