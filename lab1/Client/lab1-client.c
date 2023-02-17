@@ -341,7 +341,7 @@ slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
     UNLOCK(window_list[flow_id].lock);
 }
 
-static void
+static int
 lcore_main()
 {
     struct rte_mbuf *pkt;
@@ -475,7 +475,7 @@ lcore_main()
     // return 0;
 }
 
-static void
+static int
 lcore_main_rev(__rte_unused void *arg)
 {
     uint16_t nb_rx;
@@ -507,6 +507,7 @@ lcore_main_rev(__rte_unused void *arg)
 
         }
     }
+    return 0;
 }
 
 /*
@@ -561,6 +562,7 @@ int main(int argc, char *argv[])
     // send thread in main lcore
 	lcore_main();
 	/* >8 End of called on single lcore. */
+    free(window_list);
     printf("Done!\n");
 	/* clean up the EAL */
 	rte_eal_cleanup();
