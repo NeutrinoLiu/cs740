@@ -367,7 +367,7 @@ lcore_main(void)
 				// no need for seq since server only receives
 				tcp_h_ack->recv_ack = tcp_h->sent_seq;
 				SET(tcp_h_ack->tcp_flags, RTE_TCP_ACK_FLAG);
-				tcp_h_ack->rx_win = 100;
+				tcp_h_ack->rx_win = 10;
 
 				uint16_t tcp_cksum =  rte_ipv4_udptcp_cksum(ip_h_ack, (void *)tcp_h_ack);
 

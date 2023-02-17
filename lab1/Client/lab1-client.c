@@ -484,11 +484,13 @@ lcore_main()
 
 static inline void
 window_status(){
-    for (int i=0; i<flow_num; i++)
-        printf("flow #%d's window: head %d, sent %d, avail %d \n", i,
-            window_list[i].head,
-            window_list[i].sent,
-            window_list[i].avail);
+    for (int i=0; i<flow_num; i++){
+        printf("flow #%d:", i);
+        for (int j=0; j<window_list[i].head; j++) printf("*");
+        for (int j=window_list[i].head; j<=window_list[i].sent; j++) printf("o");
+        for (int j=window_list[i].sent+1; j<=window_list[i].avail; j++) printf("-");
+        printf("\n");
+    }
 }
 
 
@@ -503,7 +505,7 @@ receive_once() {
     nb_rx = 0;
     nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
     if (nb_rx == 0) {
-        printf("nothing reveived.\n");
+        // printf("nothing reveived.\n");
         return;
     }
 
