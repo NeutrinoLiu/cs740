@@ -11,6 +11,7 @@
 #include <rte_lcore.h>
 #include <rte_mbuf.h>
 #include <rte_udp.h>
+#include <rte_tcp.h>
 #include <rte_ip.h>
 #include <pthread.h>
 
@@ -156,7 +157,7 @@ static int parse_packet(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         printf("Bad next proto_id\n");
         return 0;
     }
@@ -400,7 +401,7 @@ lcore_main()
         ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
         ipv4_hdr->fragment_offset = 0;
         ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_UDP;
+        ipv4_hdr->next_proto_id = IPPROTO_TCP;
         ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
@@ -440,7 +441,10 @@ lcore_main()
         // ignore offset, i.e. header size, it is not used 
         // ignore rx_win, client dont receive anything
         uint16_t tcp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)tcp_hdr);
+        
         tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
+        ptr += sizeof(*tcp_hdr);
+        header_size += sizeof(*tcp_hdr);
 
         /* set the payload */
         memset(ptr, 'a', packet_len);
