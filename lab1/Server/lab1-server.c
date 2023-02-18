@@ -60,7 +60,7 @@ uint32_t gen_ack(int flow_id) {
 			ret ++;
 		} else break;
 	}
-	printf("from %x to %x, head from %d to %d", 
+	printf("from %x to %x, head from %d to %d\n", 
 		backup, window_list[flow_id]->acked,
 		window_list[flow_id]->head, ret + 1);
 	window_list[flow_id]->head = ret + 1;
@@ -73,7 +73,7 @@ void set_ack(int flow_id, uint32_t seq){
 		return;
 	}
 	SET(window_list[flow_id]->acked, 1 << index);
-	printf("ack window for flow #%d is: %x", flow_id, window_list[flow_id]->acked);
+	printf("ack window for flow #%d is: %x\n", flow_id, window_list[flow_id]->acked);
 }
 
 struct rte_mempool *mbuf_pool = NULL;
@@ -360,7 +360,6 @@ lcore_main(void)
 					if (ASSERT(flags, RTE_TCP_SYN_FLAG))
 						init_window(flow_id);
 					set_ack(flow_id, seq);
-					printf("Local window updated\n");
 				} else { // skip bad mac whos return port is 0
 					rte_pktmbuf_free(pkt);
 					nb_badmac ++; // avoid double free
