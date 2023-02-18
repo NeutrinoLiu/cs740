@@ -63,6 +63,11 @@ struct tx_window { // TODO add lock
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
+
+/* static timer */
+static uint64_t st[20];
+static uint64_t rt[20];
+
 static size_t message_size = 1000;
 static uint32_t seconds = 1;
 
@@ -344,7 +349,7 @@ slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
     UNLOCK(window_list[flow_id].lock);
 }
 
-static void receive_once();
+static uint64_t receive_once();
 static int
 lcore_main()
 {
@@ -374,9 +379,9 @@ lcore_main()
     // }  // flow[i] : 500i -> 500i
 
     while (window_list[flow_id].sent < NUM_PING-1) {
-        receive_once();
         if (!check_window(flow_id)) { // skip this flow sending when its slidewindow is full
             flow_id = (flow_id+1) % flow_num;
+            receive_once();
             continue;
         }
         // send a packet
@@ -460,19 +465,19 @@ lcore_main()
         int pkts_sent = 0;
 
         unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
-       
         if (check_window(flow_id)) {
             pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
             if(pkts_sent == 1)
             {
                 // outstanding[flow_id] ++;
+                st[tcp_hdr->sent_seq] = raw_time();
                 slide_window_onair(flow_id); //slide the window according to its seq
-                printf("packet #%d for flow #%d is sent\n", window_list[flow_id].sent, flow_id);
             }
         }
         
         // uint64_t last_sent = rte_get_timer_cycles();
         // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
+        receive_once();
         rte_pktmbuf_free(pkt);
         flow_id = (flow_id+1) % flow_num;
     }
@@ -496,10 +501,11 @@ window_status(){
 }
 
 
-static void 
+static void
 receive_once() {
     uint16_t nb_rx;
     struct rte_mbuf *r_pkts[BURST_SIZE];
+    uint64_t ret;
     // LAB1: receiving packets should be implemented in another thread
     /* now poll on receiving packets */
 
@@ -510,7 +516,6 @@ receive_once() {
         return;
     }
 
-
     for (int i = 0; i < nb_rx; i++) {
         struct sockaddr_in src, dst;
         // void *payload = NULL;
@@ -519,9 +524,11 @@ receive_once() {
         int window;
         int index = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
         int flow_id = index - 1;
-        if (index != 0) 
+        if (index != 0) {
             slide_window_ack(flow_id, ack_seq, window);  // slide and resize the window according to ack （ack: ack+window）
                                         // resize by the window in the ack, not a fix number
+            rt[ack_seq] = raw_time();
+        }
         rte_pktmbuf_free(r_pkts[i]);
     }
     window_status();
@@ -646,6 +653,12 @@ int main(int argc, char *argv[])
     free(window_list);
 	/* clean up the EAL */
 	rte_eal_cleanup();
-
+    for (int i =0; i<20; i++) {
+        printf("%d\t", st[i]);
+    }
+    printf("\n");
+    for (int i =0; i<20; i++) {
+        printf("%d\t", rt[i]);
+    }
 	return 0;
 }
