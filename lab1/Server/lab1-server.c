@@ -48,6 +48,7 @@ void init_window(int flow_id) {
 void release_window(int flow_id) {
 	free(window_list[flow_id]);
 	conn_num -= 1;
+	printf("window for flow#%d is closed.\n", flow_id);
 }
 void visualize(int flow_id) {
 	printf("flow #%d: ", flow_id);
