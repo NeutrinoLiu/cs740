@@ -44,7 +44,6 @@ void init_window(int flow_id) {
 	window_list[flow_id]->head = 0;
 	window_list[flow_id]->acked = 0;
 	conn_num += 1;
-	printf("window for flow #%d is done.", flow_id);
 }
 void release_window(int flow_id) {
 	free(window_list[flow_id]);

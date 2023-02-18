@@ -13,7 +13,7 @@
 #include <rte_udp.h>
 #include <rte_tcp.h>
 #include <rte_ip.h>
-#include <pthread.h>
+// #include <pthread.h>
 #include <unistd.h>
 
 #include <rte_common.h>
@@ -625,6 +625,9 @@ int main(int argc, char *argv[])
     // printf("target lcore is %u\n", id);
     // printf("\nstart receving threads\n");
     // rte_eal_remote_launch(lcore_main_rev, NULL, id);
+    // pthread_t tid;
+    // pthread_create(&tid, NULL, lcore_main_rev, NULL);
+
     // send thread in main lcore
     printf("start main sending threads\n");
 	lcore_main();
@@ -639,6 +642,7 @@ int main(int argc, char *argv[])
         break;
     }
     // rte_eal_wait_lcore(id);
+    // pthread_join(tid, NULL);
     // printf("all acked!");
     free(window_list);
 	/* clean up the EAL */
