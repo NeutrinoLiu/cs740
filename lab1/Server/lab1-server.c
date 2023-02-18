@@ -41,6 +41,7 @@ void init_window(int flow_id) {
 		printf("cant allocate memory for window\n");
 		return;
 	}
+	printf("window for flow#%d is created.\n", flow_id);
 	window_list[flow_id]->head = 0;
 	window_list[flow_id]->acked = 0;
 	conn_num += 1;
@@ -51,7 +52,7 @@ void release_window(int flow_id) {
 	printf("window for flow#%d is closed.\n", flow_id);
 }
 void visualize(int flow_id) {
-	printf("flow #%d: ", flow_id);
+	printf("flow #%d: [%d] ", flow_id, window_list[flow_id]->head);
 	uint64_t bits = window_list[flow_id]->acked;
 	for (int i=0; i<MAX_WIN_SIZE; i++) {
 		if (ASSERT(bits, 1)) printf("*");
@@ -62,7 +63,6 @@ void visualize(int flow_id) {
 }
 
 uint32_t gen_ack(int flow_id) {
-	uint64_t backup = window_list[flow_id]->acked;
 	uint32_t ret = window_list[flow_id]->head - 1;
 	for (int i = 0; i<MAX_WIN_SIZE; i++) {
 		if (ASSERT(window_list[flow_id]->acked, 1)) {
