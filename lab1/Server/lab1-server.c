@@ -70,6 +70,7 @@ uint32_t gen_ack(int flow_id) {
 			ret ++;
 		} else break;
 	}
+	printf("gen ack bits | ");
 	visualize(flow_id);
 	window_list[flow_id]->head = ret + 1;
 	return ret;
@@ -81,7 +82,8 @@ void set_ack(int flow_id, uint32_t seq){
 		return;
 	}
 	SET(window_list[flow_id]->acked, 1 << index);
-	// visualize(flow_id);
+	printf("set ack bits | ");
+	visualize(flow_id);
 }
 
 struct rte_mempool *mbuf_pool = NULL;
