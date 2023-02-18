@@ -353,6 +353,7 @@ lcore_main(void)
 					if (ASSERT(flags, RTE_TCP_SYN_FLAG))
 						init_window(flow_id);
 					set_ack(flow_id, seq);
+					printf("Local window updated\n");
 				} else { // skip bad mac whos return port is 0
 					rte_pktmbuf_free(pkt);
 					nb_badmac ++; // avoid double free
