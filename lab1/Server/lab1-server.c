@@ -22,8 +22,52 @@
 #define BURST_SIZE 32
 #define PORT_NUM 4
 #define MAX_FLOWS 8
+#define MAX_WIN_SIZE 10
 
-#define SET(x,y) x = x & y
+#define SET(x,y) x = x | y
+#define ASSERT(x,y) (x & y) == 0
+
+struct rx_window *window_list[MAX_FLOWS]; // pointer array instead of window object array
+size_t conn_num = 0;
+
+struct rx_window {
+	uint64_t acked; // 10111010001100 [tail-99, head-0]
+	int head;
+};
+
+void init_window(int flow_id) {
+	window_list[flow_id] = (struct rx_window *) malloc(sizeof(struct rx_window));
+	if (window_list[flow_id] == NULL) {
+		printf("cant allocate memory for window\n");
+		return;
+	}
+	window_list[flow_id]->head = 0;
+	window_list[flow_id]->acked = 0;
+	conn_num += 1;
+}
+void release_window(int flow_id) {
+	free(window_list[flow_id]);
+	conn_num -= 1;
+}
+
+uint32_t gen_ack(int flow_id) {
+	uint32_t ret = window_list[flow_id]->head - 1;
+	for (int i = 0; i<MAX_WIN_SIZE; i++) {
+		if (ASSERT(window_list[flow_id]->acked, 1)) {
+			window_list[flow_id]->acked = window_list[flow_id]->acked >> 1;
+			ret ++;
+		} else break;
+	}
+	return ret;
+}
+void set_ack(int flow_id, uint32_t seq){
+	int index = seq - window_list[flow_id]->head;
+	if ((index < 0) || (index > MAX_WIN_SIZE -1)) {
+		printf("received packet out of window\n");
+		return;
+	}
+	SET(window_list[flow_id]->acked, 1 << index);
+}
 
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
@@ -152,7 +196,8 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 static int get_port(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
-						int *seq,
+						uint32_t *seq,
+						uint8_t *flags,
                         // void **payload,
                         // size_t *payload_len,
                         struct rte_mbuf *pkt)
@@ -227,6 +272,7 @@ static int get_port(struct sockaddr_in *src,
     dst->sin_family = AF_INET;
 
 	*seq = tcp_hdr->sent_seq;
+	*flags = tcp_hdr->tcp_flags;
 
     // *payload_len = pkt->pkt_len - header;
     // *payload = (void *)p;
@@ -295,14 +341,18 @@ lcore_main(void)
 			{
 				pkt = bufs[i];
 				struct sockaddr_in src, dst;
-				int seq;
+				uint32_t seq;
+				uint8_t flags;
                 // void *payload = NULL;
                 // size_t payload_length = 0;
-                int index = get_port(&src, &dst, &seq, pkt);
+                int index = get_port(&src, &dst, &seq, &flags, pkt);
 				// printf("rv: %u, target port %u ", i, flow_id);
 				int flow_id = index - 1;
 				if(index != 0){
 					printf("received: #%d from flow #%d\n", seq, flow_id);
+					if (ASSERT(flags, RTE_TCP_SYN_FLAG))
+						init_window(flow_id);
+					set_ack(flow_id, seq);
 				} else { // skip bad mac whos return port is 0
 					rte_pktmbuf_free(pkt);
 					nb_badmac ++; // avoid double free
@@ -365,7 +415,9 @@ lcore_main(void)
 				tcp_h_ack->src_port = tcp_h->dst_port;
 				tcp_h_ack->dst_port = tcp_h->src_port;
 				// no need for seq since server only receives
-				tcp_h_ack->recv_ack = tcp_h->sent_seq;
+				tcp_h_ack->recv_ack = gen_ack(flow_id);
+				if (ASSERT(flags, RTE_TCP_FIN_FLAG))
+					release_window(flow_id);
 				SET(tcp_h_ack->tcp_flags, RTE_TCP_ACK_FLAG);
 				tcp_h_ack->rx_win = 10;
 

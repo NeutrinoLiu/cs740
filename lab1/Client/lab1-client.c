@@ -46,7 +46,7 @@
 
 
 
-#define SET(x,y) x = x & y
+#define SET(x,y) x = x | y
 
 int NUM_PING = 100;
 
@@ -484,6 +484,7 @@ lcore_main()
 
 static inline void
 window_status(){
+    printf("\n");
     for (int i=0; i<flow_num; i++){
         printf("flow #%d:", i);
         for (int j=0; j<window_list[i].head; j++) printf("*");
@@ -491,6 +492,7 @@ window_status(){
         for (int j=window_list[i].sent+1; j<=window_list[i].avail; j++) printf("-");
         printf("\n");
     }
+    printf("\n");
 }
 
 
@@ -501,7 +503,6 @@ receive_once() {
     // LAB1: receiving packets should be implemented in another thread
     /* now poll on receiving packets */
 
-    window_status();
     nb_rx = 0;
     nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
     if (nb_rx == 0) {
@@ -524,7 +525,7 @@ receive_once() {
                                         // resize by the window in the ack, not a fix number
         rte_pktmbuf_free(r_pkts[i]);
     }
-
+    window_status();
 }
 
 static void
@@ -629,6 +630,14 @@ int main(int argc, char *argv[])
 	lcore_main();
 	/* >8 End of called on single lcore. */
     printf("all sending done! waiting for receiving ack ...\n");
+    for (;;) {
+        for (int i=0; i<flow_num; i++) {
+            if (window_list[i].head < NUM_PING)
+                receive_once();
+                continue;
+        }
+        break;
+    }
     // rte_eal_wait_lcore(id);
     // printf("all acked!");
     free(window_list);
