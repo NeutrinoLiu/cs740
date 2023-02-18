@@ -32,8 +32,6 @@
 #define MAX_FLOWS 8
 #define MAX_WIN_SIZE 10
 
-// #define printf(...) printf(__VA_ARGS__)
-// #define printf(...) {}s
 
 /* optional Lock*/
 // #define WIN_LOCK
@@ -439,8 +437,6 @@ lcore_main()
         tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
         tcp_hdr->sent_seq = window_list[flow_id].sent + 1;               // not use a byte based but only use a 1000bytes based
         // ignore rev_ack, client dont receive anything
-        if (tcp_hdr->sent_seq == 0)
-            SET(tcp_hdr->tcp_flags, RTE_TCP_SYN_FLAG);  // first packet starts a TCP flow, handshake is ignred
         if (tcp_hdr->sent_seq == NUM_PING - 1)
             SET(tcp_hdr->tcp_flags, RTE_TCP_FIN_FLAG);  // last packet ends a TCP flow, farewell is ignored
         // ignore offset, i.e. header size, it is not used 
@@ -487,15 +483,15 @@ lcore_main()
 
 static inline void
 window_status(){
-    printf("\n");
-    for (int i=0; i<flow_num; i++){
-        printf("flow #%d:", i);
-        for (int j=0; j<window_list[i].head; j++) printf("*");
-        for (int j=window_list[i].head; j<=window_list[i].sent; j++) printf("o");
-        for (int j=window_list[i].sent+1; j<=window_list[i].avail; j++) printf("-");
-        printf("\n");
-    }
-    printf("\n");
+    // printf("\n");
+    // for (int i=0; i<flow_num; i++){
+    //     printf("flow #%d:", i);
+    //     for (int j=0; j<window_list[i].head; j++) printf("*");
+    //     for (int j=window_list[i].head; j<=window_list[i].sent; j++) printf("o");
+    //     for (int j=window_list[i].sent+1; j<=window_list[i].avail; j++) printf("-");
+    //     printf("\n");
+    // }
+    // printf("\n");
 }
 
 
