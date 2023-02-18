@@ -324,6 +324,7 @@ slide_window_onair(size_t flow_id){
 
 static void
 slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
+    printf("Receive acks of #%d in flow #%d\n", ack, flow_id);
     if (ack < window_list[flow_id].head) {
         printf("already acked %u\n", ack);
         return;
@@ -518,7 +519,6 @@ receive_once() {
         int window;
         int index = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
         int flow_id = index - 1;
-        printf("Receive acks of #%d in flow #%d\n", ack_seq, flow_id);
         if (index != 0) 
             slide_window_ack(flow_id, ack_seq, window);  // slide and resize the window according to ack （ack: ack+window）
                                         // resize by the window in the ack, not a fix number

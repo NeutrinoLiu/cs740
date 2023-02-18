@@ -70,8 +70,8 @@ uint32_t gen_ack(int flow_id) {
 			ret ++;
 		} else break;
 	}
-	printf("gen ack bits | ");
-	visualize(flow_id);
+	// printf("gen ack bits | ");
+	// visualize(flow_id);
 	window_list[flow_id]->head = ret + 1;
 	return ret;
 }
@@ -82,8 +82,8 @@ void set_ack(int flow_id, uint32_t seq){
 		return;
 	}
 	SET(window_list[flow_id]->acked, 1 << index);
-	printf("set ack bits | ");
-	visualize(flow_id);
+	// printf("set ack bits | ");
+	// visualize(flow_id);
 }
 
 struct rte_mempool *mbuf_pool = NULL;
@@ -468,7 +468,7 @@ lcore_main(void)
 			if (nb_replies > 0)
 			{
 				nb_tx = rte_eth_tx_burst(port, 0, acks, nb_replies);
-				printf("%u acks have been replied\n", nb_tx);
+				// printf("%u acks have been replied\n", nb_tx);
 			}
 
 			/* Free any unsent packets. */
