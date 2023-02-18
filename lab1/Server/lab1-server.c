@@ -25,7 +25,7 @@
 #define MAX_WIN_SIZE 10
 
 #define SET(x,y) x = x | y
-#define ASSERT(x,y) (x & y) == 0
+#define ASSERT(x,y) (x & y) == y
 
 struct rx_window *window_list[MAX_FLOWS]; // pointer array instead of window object array
 size_t conn_num = 0;
