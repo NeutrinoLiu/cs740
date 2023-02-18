@@ -50,6 +50,16 @@ void release_window(int flow_id) {
 	free(window_list[flow_id]);
 	conn_num -= 1;
 }
+void visualize(int flow_id) {
+	printf("flow #%d: %x", flow_id);
+	uint64_t bits = window_list[flow_id]->acked;
+	for (int i=0; i<MAX_WIN_SIZE; i++) {
+		if (ASSERT(bits, 1)) printf("*");
+		else printf("o");
+		bits = bits >> 1;
+	}
+	printf("\n");
+}
 
 uint32_t gen_ack(int flow_id) {
 	uint64_t backup = window_list[flow_id]->acked;
@@ -60,9 +70,7 @@ uint32_t gen_ack(int flow_id) {
 			ret ++;
 		} else break;
 	}
-	printf("from %x to %x, head from %d to %d\n", 
-		backup, window_list[flow_id]->acked,
-		window_list[flow_id]->head, ret + 1);
+	visualize(flow_id);
 	window_list[flow_id]->head = ret + 1;
 	return ret;
 }
@@ -73,7 +81,7 @@ void set_ack(int flow_id, uint32_t seq){
 		return;
 	}
 	SET(window_list[flow_id]->acked, 1 << index);
-	printf("ack window for flow #%d is: %x\n", flow_id, window_list[flow_id]->acked);
+	visualize(flow_id);
 }
 
 struct rte_mempool *mbuf_pool = NULL;
