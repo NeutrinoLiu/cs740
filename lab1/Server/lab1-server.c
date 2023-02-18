@@ -367,7 +367,7 @@ lcore_main(void)
 				int flow_id = index - 1;
 				if(index != 0){
 					printf("received: #%d from flow #%d\n", seq, flow_id);
-					if (ASSERT(flags, RTE_TCP_SYN_FLAG))
+					if (seq == 0)
 						init_window(flow_id);
 					set_ack(flow_id, seq);
 				} else { // skip bad mac whos return port is 0

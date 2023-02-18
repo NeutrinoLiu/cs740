@@ -32,13 +32,13 @@
 #define MAX_FLOWS 8
 #define MAX_WIN_SIZE 10
 
-#define MYPRINTF(...) printf(__VA_ARGS__)
-// #define MYPRINTF(...) {}s
+// #define printf(...) printf(__VA_ARGS__)
+// #define printf(...) {}s
 
 /* optional Lock*/
 // #define WIN_LOCK
 #ifdef WIN_LOCK
-    #define INIT(l) if (pthread_mutex_init(&l, NULL) != 0) MYPRINTF("\n mutex init has failed\n")
+    #define INIT(l) if (pthread_mutex_init(&l, NULL) != 0) printf("\n mutex init has failed\n")
     #define LOCK(l) pthread_mutex_lock(&l)
     #define UNLOCK(l) pthread_mutex_unlock(&l)
 #else
@@ -140,7 +140,7 @@ static int parse_packet(struct sockaddr_in *src,
 
     rte_eth_macaddr_get(1, &mac_addr);
     if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr)) {
-        MYPRINTF("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
 			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
             eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
 			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
@@ -148,7 +148,7 @@ static int parse_packet(struct sockaddr_in *src,
         return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
-        MYPRINTF("Bad ether type\n");
+        printf("Bad ether type\n");
         return 0;
     }
 
@@ -162,7 +162,7 @@ static int parse_packet(struct sockaddr_in *src,
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
     if (IPPROTO_IP != ip_hdr->next_proto_id) {
-        MYPRINTF("Bad next proto_id\n");
+        printf("Bad next proto_id\n");
         return 0;
     }
     
@@ -220,7 +220,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	struct rte_eth_dev_info dev_info;
 	struct rte_eth_txconf txconf;
 
-    MYPRINTF("port avail id: %u\n", port);
+    printf("port avail id: %u\n", port);
 
 	if (!rte_eth_dev_is_valid_port(port))
 		return -1;
@@ -230,7 +230,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	retval = rte_eth_dev_info_get(port, &dev_info);
 	if (retval != 0)
 	{
-		MYPRINTF("Error during getting device (port %u) info: %s\n",
+		printf("Error during getting device (port %u) info: %s\n",
 			   port, strerror(-retval));
 		return retval;
 	}
@@ -279,7 +279,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	if (retval != 0)
 		return retval;
 
-	MYPRINTF("Port %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+	printf("Port %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
 		   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
 		   port, RTE_ETHER_ADDR_BYTES(&my_eth));
 
@@ -299,7 +299,7 @@ static int
 init_window(size_t flow_num){
     window_list = (struct tx_window*) malloc(sizeof(struct tx_window) * (flow_num));
     if (window_list == NULL) {
-        MYPRINTF("fail to create tx window list.\n");
+        printf("fail to create tx window list.\n");
         return 1;
     }
     for (int i = 0; i<flow_num ; i++){ 
@@ -327,11 +327,11 @@ slide_window_onair(size_t flow_id){
 static void
 slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
     if (ack < window_list[flow_id].head) {
-        MYPRINTF("already acked %u\n", ack);
+        printf("already acked %u\n", ack);
         return;
     }
     if (ack > window_list[flow_id].sent) {
-        MYPRINTF("get ack about not sent packet(%d/%d) for flow#%d.\n",
+        printf("get ack about not sent packet(%d/%d) for flow#%d.\n",
             ack, window_list[flow_id].sent, flow_id);
         return;
     }
@@ -340,7 +340,7 @@ slide_window_ack(size_t flow_id, uint16_t ack, uint16_t new_size){
     window_list[flow_id].head = ack + 1;
     window_list[flow_id].avail = ack + new_size;
     if (window_list[flow_id].sent > window_list[flow_id].avail) 
-        MYPRINTF("the window shrinks too much\n");
+        printf("the window shrinks too much\n");
 
     UNLOCK(window_list[flow_id].lock);
 }
@@ -383,7 +383,7 @@ lcore_main()
         // send a packet
         pkt = rte_pktmbuf_alloc(mbuf_pool);
         if (pkt == NULL) {
-            MYPRINTF("Error allocating tx mbuf\n");
+            printf("Error allocating tx mbuf\n");
             return -EINVAL;
         }
         size_t header_size = 0;
@@ -411,7 +411,7 @@ lcore_main()
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
         uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-        // MYPRINTF("Checksum is %u\n", (unsigned)ipv4_checksum);
+        // printf("Checksum is %u\n", (unsigned)ipv4_checksum);
         ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
         header_size += sizeof(*ipv4_hdr);
         ptr += sizeof(*ipv4_hdr);
@@ -426,7 +426,7 @@ lcore_main()
 
         // uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
 
-        // // MYPRINTF("Udp checksum is %u\n", (unsigned)udp_cksum);
+        // // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
         // udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
         // ptr += sizeof(*udp_hdr);
         // header_size += sizeof(*udp_hdr);
@@ -470,16 +470,16 @@ lcore_main()
             {
                 // outstanding[flow_id] ++;
                 slide_window_onair(flow_id); //slide the window according to its seq
-                MYPRINTF("packet #%d for flow #%d is sent\n", window_list[flow_id].sent, flow_id);
+                printf("packet #%d for flow #%d is sent\n", window_list[flow_id].sent, flow_id);
             }
         }
         
         // uint64_t last_sent = rte_get_timer_cycles();
-        // MYPRINTF("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
+        // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
         rte_pktmbuf_free(pkt);
         flow_id = (flow_id+1) % flow_num;
     }
-    // MYPRINTF("Sent %"PRIu64" packets.\n", reqs);
+    // printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
     // return 0;
 
@@ -487,15 +487,15 @@ lcore_main()
 
 static inline void
 window_status(){
-    MYPRINTF("\n");
+    printf("\n");
     for (int i=0; i<flow_num; i++){
-        MYPRINTF("flow #%d:", i);
-        for (int j=0; j<window_list[i].head; j++) MYPRINTF("*");
-        for (int j=window_list[i].head; j<=window_list[i].sent; j++) MYPRINTF("o");
-        for (int j=window_list[i].sent+1; j<=window_list[i].avail; j++) MYPRINTF("-");
-        MYPRINTF("\n");
+        printf("flow #%d:", i);
+        for (int j=0; j<window_list[i].head; j++) printf("*");
+        for (int j=window_list[i].head; j<=window_list[i].sent; j++) printf("o");
+        for (int j=window_list[i].sent+1; j<=window_list[i].avail; j++) printf("-");
+        printf("\n");
     }
-    MYPRINTF("\n");
+    printf("\n");
 }
 
 
@@ -509,7 +509,7 @@ receive_once() {
     nb_rx = 0;
     nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
     if (nb_rx == 0) {
-        // MYPRINTF("nothing reveived.\n");
+        // printf("nothing reveived.\n");
         return;
     }
 
@@ -522,7 +522,7 @@ receive_once() {
         int window;
         int index = parse_packet(&src, &dst, &ack_seq, &window, r_pkts[i]);
         int flow_id = index - 1;
-        MYPRINTF("Receive acks of #%d in flow #%d\n", ack_seq, flow_id);
+        printf("Receive acks of #%d in flow #%d\n", ack_seq, flow_id);
         if (index != 0) 
             slide_window_ack(flow_id, ack_seq, window);  // slide and resize the window according to ack （ack: ack+window）
                                         // resize by the window in the ack, not a fix number
@@ -544,13 +544,13 @@ lcore_main_rev(__rte_unused void *arg)
         for (;;) {
             nb_rx = rte_eth_rx_burst(1, 0, r_pkts, BURST_SIZE);
             if (nb_rx == 0) {
-                MYPRINTF("nothing reveived.\n");
+                printf("nothing reveived.\n");
                 sleep(1);
                 continue;
             }
         }
 
-        MYPRINTF("Receive %u acks\n", (unsigned)nb_rx);
+        printf("Receive %u acks\n", (unsigned)nb_rx);
         for (int i = 0; i < nb_rx; i++) {
             struct sockaddr_in src, dst;
             // void *payload = NULL;
@@ -590,7 +590,7 @@ int main(int argc, char *argv[])
         flow_num = (int) atoi(argv[1]);
         flow_size =  (int) atoi(argv[2]);
     } else {
-        MYPRINTF( "usage: ./lab1-client <flow_num> <flow_size>\n");
+        printf( "usage: ./lab1-client <flow_num> <flow_size>\n");
         return 1;
     }
 
@@ -622,20 +622,20 @@ int main(int argc, char *argv[])
 	/* >8 End of initializing all ports. */
 
     init_window(flow_num);
-    // MYPRINTF("i am core %u\n", rte_lcore_id);
+    // printf("i am core %u\n", rte_lcore_id);
     // standalone thread for rev
     unsigned int id = rte_get_next_lcore(-1, 1, 0);
-    // MYPRINTF("target lcore is %u\n", id);
-    // MYPRINTF("\nstart receving threads\n");
+    // printf("target lcore is %u\n", id);
+    // printf("\nstart receving threads\n");
     // rte_eal_remote_launch(lcore_main_rev, NULL, id);
     // pthread_t tid;
     // pthread_create(&tid, NULL, lcore_main_rev, NULL);
 
     // send thread in main lcore
-    MYPRINTF("start main sending threads\n");
+    printf("start main sending threads\n");
 	lcore_main();
 	/* >8 End of called on single lcore. */
-    MYPRINTF("all sending done! waiting for receiving ack ...\n");
+    printf("all sending done! waiting for receiving ack ...\n");
     for (;;) {
         for (int i=0; i<flow_num; i++) {
             if (window_list[i].head < NUM_PING)
@@ -646,7 +646,7 @@ int main(int argc, char *argv[])
     }
     // rte_eal_wait_lcore(id);
     // pthread_join(tid, NULL);
-    // MYPRINTF("all acked!");
+    // printf("all acked!");
     free(window_list);
 	/* clean up the EAL */
 	rte_eal_cleanup();
