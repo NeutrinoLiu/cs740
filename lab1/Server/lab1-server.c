@@ -44,6 +44,7 @@ void init_window(int flow_id) {
 	window_list[flow_id]->head = 0;
 	window_list[flow_id]->acked = 0;
 	conn_num += 1;
+	printf("window for flow #%d is done.", flow_id);
 }
 void release_window(int flow_id) {
 	free(window_list[flow_id]);
@@ -51,6 +52,7 @@ void release_window(int flow_id) {
 }
 
 uint32_t gen_ack(int flow_id) {
+	uint64_t backup = window_list[flow_id]->acked;
 	uint32_t ret = window_list[flow_id]->head - 1;
 	for (int i = 0; i<MAX_WIN_SIZE; i++) {
 		if (ASSERT(window_list[flow_id]->acked, 1)) {
@@ -58,6 +60,10 @@ uint32_t gen_ack(int flow_id) {
 			ret ++;
 		} else break;
 	}
+	printf("from %x to %x, head from %d to %d", 
+		backup, window_list[flow_id]->acked,
+		window_list[flow_id]->head, ret + 1);
+	window_list[flow_id]->head = ret + 1;
 	return ret;
 }
 void set_ack(int flow_id, uint32_t seq){
@@ -67,6 +73,7 @@ void set_ack(int flow_id, uint32_t seq){
 		return;
 	}
 	SET(window_list[flow_id]->acked, 1 << index);
+	printf("ack window for flow #%d is: %x", flow_id, window_list[flow_id]->acked);
 }
 
 struct rte_mempool *mbuf_pool = NULL;
