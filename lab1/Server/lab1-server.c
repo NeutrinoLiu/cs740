@@ -51,7 +51,7 @@ void release_window(int flow_id) {
 	conn_num -= 1;
 }
 void visualize(int flow_id) {
-	printf("flow #%d: %x", flow_id);
+	printf("flow #%d: ", flow_id);
 	uint64_t bits = window_list[flow_id]->acked;
 	for (int i=0; i<MAX_WIN_SIZE; i++) {
 		if (ASSERT(bits, 1)) printf("*");
@@ -81,7 +81,7 @@ void set_ack(int flow_id, uint32_t seq){
 		return;
 	}
 	SET(window_list[flow_id]->acked, 1 << index);
-	visualize(flow_id);
+	// visualize(flow_id);
 }
 
 struct rte_mempool *mbuf_pool = NULL;
